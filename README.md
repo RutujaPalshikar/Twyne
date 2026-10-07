@@ -1,6 +1,6 @@
 # Twyne
 
-Ephemeral file-sharing rooms. **Stage 1: rooms, participants and presence.** (File transfer comes in stage 2.)
+Ephemeral file-sharing rooms. **Stage 1: rooms, participants and presence. Stage 2: the complete room interface** (file picking, selection, share confirmation, history table). Actual file transfer is not implemented yet.
 
 MERN only: React (Vite) + Express + MongoDB/Mongoose. No accounts, no file storage.
 
