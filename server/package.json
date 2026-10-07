@@ -1,0 +1,17 @@
+{
+  "name": "twyne-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Twyne API: temporary rooms, participants and presence (MongoDB metadata only).",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1",
+    "mongoose": "^9.10.4"
+  }
+}
