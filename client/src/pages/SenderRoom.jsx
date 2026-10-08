@@ -3,7 +3,13 @@ import { Navigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import { useSession } from "../context/SessionContext.jsx";
 import usePolling from "../hooks/usePolling.js";
-import { DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_MAX_PARTICIPANTS, MAX_FILES } from "../config.js";
+import {
+  DEFAULT_HEARTBEAT_INTERVAL_MS,
+  DEFAULT_MAX_FILE_SIZE_BYTES,
+  DEFAULT_MAX_PARTICIPANTS,
+  MAX_FILES,
+} from "../config.js";
+import useSenderQueue from "../hooks/useSenderQueue.js";
 import { formatBytes } from "../utils/format.js";
 import CopyButton from "../components/CopyButton.jsx";
 import Notice from "../components/Notice.jsx";
@@ -46,12 +52,16 @@ function SenderWorkspace({ session }) {
   const [fileToRemove, setFileToRemove] = useState(null);
   const [personToRemove, setPersonToRemove] = useState(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [prepared, setPrepared] = useState([]); // shares confirmed in this tab (no transfer yet)
   const [shareNotice, setShareNotice] = useState("");
   const [roomError, setRoomError] = useState("");
 
   const max = session.config?.maxParticipants ?? DEFAULT_MAX_PARTICIPANTS;
   const pollMs = session.config?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+  const maxFiles = session.config?.maxFiles ?? MAX_FILES;
+  const maxFileSize = session.config?.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE_BYTES;
+  const { enqueue } = useSenderQueue(session, setRoomError);
+  // While anything is being sent, refresh every second so the progress is live.
+  const sending = history.some((h) => h.status === "queued" || h.status === "uploading");
 
   async function load() {
     try {
@@ -64,7 +74,7 @@ function SenderWorkspace({ session }) {
       else setOffline(true);
     }
   }
-  usePolling(load, pollMs);
+  usePolling(load, sending ? 1000 : pollMs);
 
   // A participant who goes inactive or is removed can no longer be selected.
   // Dropping them here also stops them from silently re-selecting if they come back.
@@ -84,20 +94,26 @@ function SenderWorkspace({ session }) {
 
     const known = new Set(files.map((f) => fileKey(f.file)));
     const fresh = [];
+    const tooBig = [];
+    const empty = [];
     let duplicates = 0;
     for (const file of picked) {
       const key = fileKey(file);
-      if (known.has(key)) duplicates++;
+      if (file.size === 0) empty.push(file.name);
+      else if (file.size > maxFileSize) tooBig.push(file.name);
+      else if (known.has(key)) duplicates++;
       else {
         known.add(key);
         fresh.push({ id: newId(), file });
       }
     }
-    const accepted = fresh.slice(0, MAX_FILES - files.length);
+    const accepted = fresh.slice(0, maxFiles - files.length);
     const skipped = fresh.length - accepted.length;
 
     const notes = [];
-    if (skipped) notes.push(`Only ${MAX_FILES} files are allowed, so ${skipped} ${skipped === 1 ? "file was" : "files were"} skipped.`);
+    if (tooBig.length) notes.push(`Too large (limit ${formatBytes(maxFileSize)} per file): ${tooBig.join(", ")}.`);
+    if (empty.length) notes.push(`Empty files can't be shared: ${empty.join(", ")}.`);
+    if (skipped) notes.push(`Only ${maxFiles} files are allowed, so ${skipped} ${skipped === 1 ? "file was" : "files were"} skipped.`);
     if (duplicates) notes.push(`${duplicates} already added ${duplicates === 1 ? "file was" : "files were"} ignored.`);
     setFileError(notes.join(" "));
 
@@ -159,22 +175,35 @@ function SenderWorkspace({ session }) {
   if (chosenFiles.length === 0) problems.push("Select at least one file.");
   if (chosenPeople.length === 0) problems.push("Select at least one active participant.");
 
-  function confirmShare() {
-    const now = new Date().toISOString();
-    const rows = chosenFiles.map((f) => ({
-      id: `${f.id}-${now}`,
-      filename: f.file.name,
-      size: f.file.size,
-      createdAt: now,
-      recipients: chosenPeople.map((p) => ({ name: p.name, status: "pending" })),
-    }));
-    setPrepared((prev) => [...rows, ...prev]);
+  async function confirmShare() {
     setShareOpen(false);
-    setShareNotice(
-      `Share confirmed: ${chosenFiles.length} ${chosenFiles.length === 1 ? "file" : "files"} for ${chosenPeople.length} ${
-        chosenPeople.length === 1 ? "participant" : "participants"
-      }. Sending isn't available yet, so they are listed as Ready to send.`
-    );
+    setRoomError("");
+
+    // Check the limits BEFORE sending anything (the server checks again).
+    if (chosenFiles.length > maxFiles) return setRoomError(`You can share at most ${maxFiles} files at a time.`);
+    const tooBig = chosenFiles.find((f) => f.file.size > maxFileSize);
+    if (tooBig) return setRoomError(`${tooBig.file.name} is larger than ${formatBytes(maxFileSize)}.`);
+
+    const picked = chosenFiles;
+    const people = chosenPeople;
+    try {
+      const result = await api.createTransfers(
+        session,
+        picked.map((f) => ({ name: f.file.name, size: f.file.size, type: f.file.type })),
+        people.map((p) => p.id)
+      );
+      // result.transfers is in the same order as `picked`
+      enqueue(result.transfers.map((transfer, i) => ({ transfer, file: picked[i].file })));
+      setShareNotice(
+        `Sending ${picked.length} ${picked.length === 1 ? "file" : "files"} to ${people.length} ${
+          people.length === 1 ? "participant" : "participants"
+        }. Keep this tab open until it finishes.`
+      );
+      await load();
+    } catch (err) {
+      if (err.status === 404 || err.status === 401) endSession("Your room was closed. Its data was deleted.");
+      else setRoomError(err.message);
+    }
   }
 
   // ---------- Close room ----------
@@ -187,17 +216,6 @@ function SenderWorkspace({ session }) {
     }
     endSession("Room closed. All of its temporary data was deleted.");
   }
-
-  const historyRows = [
-    ...prepared,
-    ...history.map((h) => ({
-      id: h.id,
-      filename: h.filename,
-      size: h.size,
-      createdAt: h.createdAt,
-      recipients: h.recipients.map((r) => ({ name: r.participantName, status: r.status })),
-    })),
-  ];
 
   return (
     <main className="container page">
@@ -220,7 +238,8 @@ function SenderWorkspace({ session }) {
         <FilesPanel
           files={files}
           selectedIds={selectedFileIds}
-          max={MAX_FILES}
+          max={maxFiles}
+          maxFileSize={maxFileSize}
           error={fileError}
           onPick={handlePick}
           onToggle={toggle(setSelectedFileIds)}
@@ -263,7 +282,7 @@ function SenderWorkspace({ session }) {
       </div>
       <Notice tone="info" onDismiss={shareNotice ? () => setShareNotice("") : undefined}>{shareNotice}</Notice>
 
-      <TransferHistory rows={historyRows} />
+      <TransferHistory rows={history} />
 
       <section className="panel panel-close" aria-labelledby="close-heading">
         <h2 id="close-heading">Close room</h2>

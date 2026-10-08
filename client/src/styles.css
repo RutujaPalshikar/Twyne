@@ -320,3 +320,24 @@ input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; padding: 0; f
   .strand { animation: none; }
   .btn { transition: none; }
 }
+
+/* ---------- File transfer UI ---------- */
+.progress-ok span { background: #1d9a5b; }
+.progress-bad span { background: var(--brick); }
+.state-wait { background: #e3eaee; color: var(--slate); }
+.state-partial { background: #fbe6c4; color: #6b4300; }
+.state-done { background: #cdeedd; color: #0d5c33; }
+.state-active { background: #dcecf0; color: var(--ink); }
+
+.recipient-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.4rem; }
+.recipient-list li { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.5rem; }
+
+.received-list li { grid-template-columns: 1fr; padding: 0.75rem 0; }
+.received-state { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.75rem; }
+.received-progress { flex: 1 1 12rem; min-width: 0; }
+.received-progress .progress { margin-bottom: 0.25rem; }
+@media (min-width: 640px) {
+  .received-list li { grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; }
+  .received-state { justify-content: flex-end; }
+  .received-progress { flex: 0 0 14rem; }
+}

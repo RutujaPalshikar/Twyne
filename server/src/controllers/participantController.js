@@ -5,6 +5,7 @@ import { generateParticipantId } from "../utils/ids.js";
 import { cleanString } from "../utils/validate.js";
 import { HttpError } from "../utils/httpError.js";
 import { activeCutoff, isFresh } from "../utils/presence.js";
+import { failParticipant } from "../services/transferService.js";
 
 // What the sender sees. participantId is only ever shown to the sender.
 const senderView = (p) => ({
@@ -58,6 +59,7 @@ export async function removeParticipant(req, res) {
   if (!mongoose.isValidObjectId(id)) throw new HttpError(404, "Participant not found.", "NOT_FOUND");
   const result = await Participant.deleteOne({ _id: id, room: req.room._id });
   if (result.deletedCount === 0) throw new HttpError(404, "Participant not found.", "NOT_FOUND");
+  failParticipant(String(req.room._id), id, "Removed from the room");
   res.json({ removed: true });
 }
 

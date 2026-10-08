@@ -3,10 +3,12 @@ import Participant from "../models/Participant.js";
 import Transfer from "../models/Transfer.js";
 import { SWEEP_INTERVAL_MS } from "../config/constants.js";
 import { activeCutoff } from "../utils/presence.js";
+import { dropRoom } from "./transferService.js";
 
 // Closing a room erases it completely: room, participants and history.
 export async function closeRoom(roomId) {
   await Room.updateOne({ _id: roomId }, { isActive: false }); // blocks new joins immediately
+  dropRoom(String(roomId)); // abort live transfers and free their chunks
   await Room.deleteOne({ _id: roomId });
   await Promise.all([
     Participant.deleteMany({ room: roomId }),

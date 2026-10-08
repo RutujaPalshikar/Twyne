@@ -4,6 +4,8 @@ import { api } from "../api/client.js";
 import { useSession } from "../context/SessionContext.jsx";
 import usePolling from "../hooks/usePolling.js";
 import { DEFAULT_HEARTBEAT_INTERVAL_MS } from "../config.js";
+import useReceiver from "../hooks/useReceiver.js";
+import ReceivedFiles from "../components/ReceivedFiles.jsx";
 
 // Guard: only a participant who joined THIS room may see it.
 export default function ParticipantRoom() {
@@ -34,6 +36,7 @@ function ParticipantWorkspace({ session }) {
     }
   }
   usePolling(check, pollMs);
+  const { items, dismiss } = useReceiver(session);
 
   async function handleLeave() {
     try {
@@ -68,10 +71,7 @@ function ParticipantWorkspace({ session }) {
           </p>
         </section>
 
-        <section className="panel panel-dashed" aria-labelledby="received-heading">
-          <h2 id="received-heading">Received files</h2>
-          <p className="empty">Files the sender shares with you will appear here. Receiving isn't available yet.</p>
-        </section>
+        <ReceivedFiles items={items} onDismiss={dismiss} />
       </div>
     </main>
   );

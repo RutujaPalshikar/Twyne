@@ -5,7 +5,7 @@ import XButton from "./XButton.jsx";
 import Notice from "./Notice.jsx";
 
 // Files live only in this tab's memory. Nothing is uploaded at this stage.
-export default function FilesPanel({ files, selectedIds, max, error, onPick, onToggle, onSelectAll, onDeselectAll, onRemove }) {
+export default function FilesPanel({ files, selectedIds, max, maxFileSize, error, onPick, onToggle, onSelectAll, onDeselectAll, onRemove }) {
   const inputRef = useRef(null);
   const full = files.length >= max;
 
@@ -20,7 +20,7 @@ export default function FilesPanel({ files, selectedIds, max, error, onPick, onT
       <button type="button" className="btn btn-secondary btn-block" onClick={() => inputRef.current.click()} disabled={full}>
         {full ? `Limit of ${max} files reached` : "Choose files"}
       </button>
-      <p className="hint">Files stay in this browser tab until you share them. Nothing is uploaded yet.</p>
+      <p className="hint">Up to {max} files, {formatBytes(maxFileSize)} each. Files stay in this browser tab and are sent in small pieces when you press SHARE.</p>
       <Notice tone="error">{error}</Notice>
 
       {files.length === 0 ? (

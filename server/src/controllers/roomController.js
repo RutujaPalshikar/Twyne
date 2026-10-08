@@ -1,12 +1,12 @@
 import Room from "../models/Room.js";
 import Participant from "../models/Participant.js";
-import Transfer from "../models/Transfer.js";
 import { ROOM_NAME_MAX, PARTICIPANT_NAME_MAX, clientConfig } from "../config/constants.js";
 import { generateRoomCode, generateSessionToken } from "../utils/ids.js";
 import { cleanString, isString } from "../utils/validate.js";
 import { HttpError } from "../utils/httpError.js";
 import { isFresh } from "../utils/presence.js";
 import { closeRoom } from "../services/roomService.js";
+import { failParticipant, historyForRoom } from "../services/transferService.js";
 
 // POST /api/rooms  { roomName }
 export async function createRoom(req, res) {
@@ -94,23 +94,13 @@ export async function leaveRoom(req, res) {
     { _id: req.participant._id },
     { isActive: false, sessionToken: null }
   );
+  failParticipant(String(req.room._id), String(req.participant._id), "Left the room");
   res.json({ left: true });
 }
 
-// GET /api/rooms/:roomCode/history  (sender only)
+// GET /api/rooms/:roomCode/history  (sender only): live progress merged with saved metadata
 export async function getHistory(req, res) {
-  const transfers = await Transfer.find({ room: req.room._id }).sort({ createdAt: -1 }).lean();
-  res.json({
-    history: transfers.map((t) => ({
-      id: t._id,
-      fileId: t.fileId,
-      filename: t.filename,
-      size: t.size,
-      recipients: t.recipients,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt,
-    })),
-  });
+  res.json({ history: await historyForRoom(req.room._id) });
 }
 
 // DELETE /api/rooms/:roomCode  (sender only)
