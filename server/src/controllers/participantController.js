@@ -7,7 +7,6 @@ import { HttpError } from "../utils/httpError.js";
 import { activeCutoff, isFresh } from "../utils/presence.js";
 import { failParticipant } from "../services/transferService.js";
 
-// What the sender sees. participantId is only ever shown to the sender.
 const senderView = (p) => ({
   id: p._id,
   name: p.name,
@@ -18,22 +17,39 @@ const senderView = (p) => ({
   createdAt: p.createdAt,
 });
 
-// GET /api/rooms/:roomCode/participants  (sender)
 export async function listParticipants(req, res) {
-  const participants = await Participant.find({ room: req.room._id }).sort({ createdAt: 1 });
-  res.json({ participants: participants.map(senderView), max: MAX_PARTICIPANTS });
+  const participants = await Participant.find({ room: req.room._id }).sort({
+    createdAt: 1,
+  });
+  res.json({
+    participants: participants.map(senderView),
+    max: MAX_PARTICIPANTS,
+  });
 }
 
-// POST /api/rooms/:roomCode/participants  { name }  (sender)
 export async function addParticipant(req, res) {
-  const name = cleanString(req.body?.name, PARTICIPANT_NAME_MAX, "Participant name");
+  const name = cleanString(
+    req.body?.name,
+    PARTICIPANT_NAME_MAX,
+    "Participant name",
+  );
 
-  const existing = await Participant.find({ room: req.room._id }).select("name");
+  const existing = await Participant.find({ room: req.room._id }).select(
+    "name",
+  );
   if (existing.length >= MAX_PARTICIPANTS) {
-    throw new HttpError(409, `A room can have at most ${MAX_PARTICIPANTS} participants.`, "ROOM_FULL");
+    throw new HttpError(
+      409,
+      `A room can have at most ${MAX_PARTICIPANTS} participants.`,
+      "ROOM_FULL",
+    );
   }
   if (existing.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-    throw new HttpError(409, "Someone in this room already has that name.", "DUPLICATE_NAME");
+    throw new HttpError(
+      409,
+      "Someone in this room already has that name.",
+      "DUPLICATE_NAME",
+    );
   }
 
   let participant = null;
@@ -45,25 +61,30 @@ export async function addParticipant(req, res) {
         participantId: generateParticipantId(),
       });
     } catch (err) {
-      if (err.code !== 11000) throw err; // duplicate participantId: generate another
+      if (err.code !== 11000) throw err;
     }
   }
-  if (!participant) throw new HttpError(503, "Could not generate a participant ID. Try again.", "NO_ID");
+  if (!participant)
+    throw new HttpError(
+      503,
+      "Could not generate a participant ID. Try again.",
+      "NO_ID",
+    );
 
   res.status(201).json({ participant: senderView(participant) });
 }
 
-// DELETE /api/rooms/:roomCode/participants/:id  (sender)
 export async function removeParticipant(req, res) {
   const { id } = req.params;
-  if (!mongoose.isValidObjectId(id)) throw new HttpError(404, "Participant not found.", "NOT_FOUND");
+  if (!mongoose.isValidObjectId(id))
+    throw new HttpError(404, "Participant not found.", "NOT_FOUND");
   const result = await Participant.deleteOne({ _id: id, room: req.room._id });
-  if (result.deletedCount === 0) throw new HttpError(404, "Participant not found.", "NOT_FOUND");
+  if (result.deletedCount === 0)
+    throw new HttpError(404, "Participant not found.", "NOT_FOUND");
   failParticipant(String(req.room._id), id, "Removed from the room");
   res.json({ removed: true });
 }
 
-// GET /api/rooms/:roomCode/participants/active  (sender or participant)
 export async function getActiveParticipants(req, res) {
   const participants = await Participant.find({
     room: req.room._id,
@@ -72,7 +93,7 @@ export async function getActiveParticipants(req, res) {
   }).sort({ createdAt: 1 });
 
   res.json({
-    senderActive: true, // loadRoom already closed the room otherwise
+    senderActive: true,
     participants: participants.map((p) => ({
       id: p._id,
       name: p.name,

@@ -18,13 +18,11 @@ import FilesPanel from "../components/FilesPanel.jsx";
 import ParticipantsPanel from "../components/ParticipantsPanel.jsx";
 import TransferHistory from "../components/TransferHistory.jsx";
 
-// crypto.randomUUID only exists on secure origins (https / localhost); phones testing over
-// a plain-http LAN address need the fallback.
 let counter = 0;
-const newId = () => (crypto.randomUUID ? crypto.randomUUID() : `f${Date.now()}-${counter++}`);
+const newId = () =>
+  crypto.randomUUID ? crypto.randomUUID() : `f${Date.now()}-${counter++}`;
 const fileKey = (f) => `${f.name}|${f.size}|${f.lastModified}`;
 
-// Guard: only the sender of THIS room may see the workspace.
 export default function SenderRoom() {
   const { session } = useSession();
   const { roomCode } = useParams();
@@ -37,18 +35,15 @@ export default function SenderRoom() {
 function SenderWorkspace({ session }) {
   const { endSession } = useSession();
 
-  // Server data
   const [participants, setParticipants] = useState([]);
   const [history, setHistory] = useState([]);
   const [offline, setOffline] = useState(false);
 
-  // Browser-memory files: [{ id, file }]. Selection is a Set of ids.
   const [files, setFiles] = useState([]);
   const [selectedFileIds, setSelectedFileIds] = useState(() => new Set());
   const [selectedPeopleIds, setSelectedPeopleIds] = useState(() => new Set());
   const [fileError, setFileError] = useState("");
 
-  // Dialogs and share results
   const [fileToRemove, setFileToRemove] = useState(null);
   const [personToRemove, setPersonToRemove] = useState(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -56,40 +51,47 @@ function SenderWorkspace({ session }) {
   const [roomError, setRoomError] = useState("");
 
   const max = session.config?.maxParticipants ?? DEFAULT_MAX_PARTICIPANTS;
-  const pollMs = session.config?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+  const pollMs =
+    session.config?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
   const maxFiles = session.config?.maxFiles ?? MAX_FILES;
-  const maxFileSize = session.config?.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE_BYTES;
+  const maxFileSize =
+    session.config?.maxFileSizeBytes ?? DEFAULT_MAX_FILE_SIZE_BYTES;
   const { enqueue } = useSenderQueue(session, setRoomError);
-  // While anything is being sent, refresh every second so the progress is live.
-  const sending = history.some((h) => h.status === "queued" || h.status === "uploading");
+
+  const sending = history.some(
+    (h) => h.status === "queued" || h.status === "uploading",
+  );
 
   async function load() {
     try {
-      const [people, hist] = await Promise.all([api.listParticipants(session), api.getHistory(session)]);
+      const [people, hist] = await Promise.all([
+        api.listParticipants(session),
+        api.getHistory(session),
+      ]);
       setParticipants(people.participants);
       setHistory(hist.history);
       setOffline(false);
     } catch (err) {
-      if (err.status === 404 || err.status === 401) endSession("Your room was closed. Its data was deleted.");
+      if (err.status === 404 || err.status === 401)
+        endSession("Your room was closed. Its data was deleted.");
       else setOffline(true);
     }
   }
   usePolling(load, sending ? 1000 : pollMs);
 
-  // A participant who goes inactive or is removed can no longer be selected.
-  // Dropping them here also stops them from silently re-selecting if they come back.
   useEffect(() => {
-    const selectable = new Set(participants.filter((p) => p.active).map((p) => p.id));
+    const selectable = new Set(
+      participants.filter((p) => p.active).map((p) => p.id),
+    );
     setSelectedPeopleIds((prev) => {
       const next = new Set([...prev].filter((id) => selectable.has(id)));
       return next.size === prev.size ? prev : next;
     });
   }, [participants]);
 
-  // ---------- Files ----------
   function handlePick(e) {
     const picked = Array.from(e.target.files);
-    e.target.value = ""; // lets the same file be chosen again later
+    e.target.value = "";
     if (picked.length === 0) return;
 
     const known = new Set(files.map((f) => fileKey(f.file)));
@@ -111,14 +113,26 @@ function SenderWorkspace({ session }) {
     const skipped = fresh.length - accepted.length;
 
     const notes = [];
-    if (tooBig.length) notes.push(`Too large (limit ${formatBytes(maxFileSize)} per file): ${tooBig.join(", ")}.`);
-    if (empty.length) notes.push(`Empty files can't be shared: ${empty.join(", ")}.`);
-    if (skipped) notes.push(`Only ${maxFiles} files are allowed, so ${skipped} ${skipped === 1 ? "file was" : "files were"} skipped.`);
-    if (duplicates) notes.push(`${duplicates} already added ${duplicates === 1 ? "file was" : "files were"} ignored.`);
+    if (tooBig.length)
+      notes.push(
+        `Too large (limit ${formatBytes(maxFileSize)} per file): ${tooBig.join(", ")}.`,
+      );
+    if (empty.length)
+      notes.push(`Empty files can't be shared: ${empty.join(", ")}.`);
+    if (skipped)
+      notes.push(
+        `Only ${maxFiles} files are allowed, so ${skipped} ${skipped === 1 ? "file was" : "files were"} skipped.`,
+      );
+    if (duplicates)
+      notes.push(
+        `${duplicates} already added ${duplicates === 1 ? "file was" : "files were"} ignored.`,
+      );
     setFileError(notes.join(" "));
 
     setFiles((prev) => [...prev, ...accepted]);
-    setSelectedFileIds((prev) => new Set([...prev, ...accepted.map((f) => f.id)])); // new files start selected
+    setSelectedFileIds(
+      (prev) => new Set([...prev, ...accepted.map((f) => f.id)]),
+    );
   }
 
   function confirmRemoveFile() {
@@ -140,7 +154,6 @@ function SenderWorkspace({ session }) {
       return next;
     });
 
-  // ---------- Participants ----------
   async function addParticipant(name) {
     await api.addParticipant(session, name);
     await load();
@@ -165,50 +178,68 @@ function SenderWorkspace({ session }) {
   const inviteText = (p) =>
     `Join my Twyne room "${session.roomName}". Room code: ${session.roomCode}. Your name: ${p.name}. Participant ID: ${p.participantId}.`;
 
-  // ---------- Share ----------
-  // Effective selection = what is ticked AND still exists/active right now.
   const chosenFiles = files.filter((f) => selectedFileIds.has(f.id));
-  const chosenPeople = participants.filter((p) => p.active && selectedPeopleIds.has(p.id));
+  const chosenPeople = participants.filter(
+    (p) => p.active && selectedPeopleIds.has(p.id),
+  );
   const canShare = chosenFiles.length > 0 && chosenPeople.length > 0;
 
   const problems = [];
   if (chosenFiles.length === 0) problems.push("Select at least one file.");
-  if (chosenPeople.length === 0) problems.push("Select at least one active participant.");
+  if (chosenPeople.length === 0)
+    problems.push("Select at least one active participant.");
 
   async function confirmShare() {
     setShareOpen(false);
     setRoomError("");
 
-    // Check the limits BEFORE sending anything (the server checks again).
-    if (chosenFiles.length > maxFiles) return setRoomError(`You can share at most ${maxFiles} files at a time.`);
+    if (chosenFiles.length > maxFiles)
+      return setRoomError(`You can share at most ${maxFiles} files at a time.`);
     const tooBig = chosenFiles.find((f) => f.file.size > maxFileSize);
-    if (tooBig) return setRoomError(`${tooBig.file.name} is larger than ${formatBytes(maxFileSize)}.`);
+    if (tooBig)
+      return setRoomError(
+        `${tooBig.file.name} is larger than ${formatBytes(maxFileSize)}.`,
+      );
 
     const picked = chosenFiles;
     const people = chosenPeople;
     try {
       const result = await api.createTransfers(
         session,
-        picked.map((f) => ({ name: f.file.name, size: f.file.size, type: f.file.type })),
-        people.map((p) => p.id)
+        picked.map((f) => ({
+          name: f.file.name,
+          size: f.file.size,
+          type: f.file.type,
+        })),
+        people.map((p) => p.id),
       );
-      // result.transfers is in the same order as `picked`
-      enqueue(result.transfers.map((transfer, i) => ({ transfer, file: picked[i].file })));
+
+      enqueue(
+        result.transfers.map((transfer, i) => ({
+          transfer,
+          file: picked[i].file,
+        })),
+      );
       setShareNotice(
         `Sending ${picked.length} ${picked.length === 1 ? "file" : "files"} to ${people.length} ${
           people.length === 1 ? "participant" : "participants"
-        }. Keep this tab open until it finishes.`
+        }. Keep this tab open until it finishes.`,
       );
       await load();
     } catch (err) {
-      if (err.status === 404 || err.status === 401) endSession("Your room was closed. Its data was deleted.");
+      if (err.status === 404 || err.status === 401)
+        endSession("Your room was closed. Its data was deleted.");
       else setRoomError(err.message);
     }
   }
 
-  // ---------- Close room ----------
   async function handleClose() {
-    if (!window.confirm("Close this room? Everyone is disconnected and the room's history is deleted.")) return;
+    if (
+      !window.confirm(
+        "Close this room? Everyone is disconnected and the room's history is deleted.",
+      )
+    )
+      return;
     try {
       await api.closeRoom(session);
     } catch (err) {
@@ -231,8 +262,18 @@ function SenderWorkspace({ session }) {
         </div>
       </header>
 
-      {offline && <Notice tone="info">Connection lost. Retrying… The room closes if you stay offline for about 15 seconds.</Notice>}
-      <Notice tone="error" onDismiss={roomError ? () => setRoomError("") : undefined}>{roomError}</Notice>
+      {offline && (
+        <Notice tone="info">
+          Connection lost. Retrying… The room closes if you stay offline for
+          about 15 seconds.
+        </Notice>
+      )}
+      <Notice
+        tone="error"
+        onDismiss={roomError ? () => setRoomError("") : undefined}
+      >
+        {roomError}
+      </Notice>
 
       <div className="panels-2">
         <FilesPanel
@@ -243,7 +284,9 @@ function SenderWorkspace({ session }) {
           error={fileError}
           onPick={handlePick}
           onToggle={toggle(setSelectedFileIds)}
-          onSelectAll={() => setSelectedFileIds(new Set(files.map((f) => f.id)))}
+          onSelectAll={() =>
+            setSelectedFileIds(new Set(files.map((f) => f.id)))
+          }
           onDeselectAll={() => setSelectedFileIds(new Set())}
           onRemove={setFileToRemove}
         />
@@ -254,7 +297,11 @@ function SenderWorkspace({ session }) {
           inviteText={inviteText}
           onAdd={addParticipant}
           onToggle={toggle(setSelectedPeopleIds)}
-          onSelectAll={() => setSelectedPeopleIds(new Set(participants.filter((p) => p.active).map((p) => p.id)))}
+          onSelectAll={() =>
+            setSelectedPeopleIds(
+              new Set(participants.filter((p) => p.active).map((p) => p.id)),
+            )
+          }
           onDeselectAll={() => setSelectedPeopleIds(new Set())}
           onRemove={setPersonToRemove}
         />
@@ -263,11 +310,14 @@ function SenderWorkspace({ session }) {
       <div className="share-bar">
         <div>
           <p className="share-summary">
-            {chosenFiles.length} {chosenFiles.length === 1 ? "file" : "files"} for {chosenPeople.length}{" "}
+            {chosenFiles.length} {chosenFiles.length === 1 ? "file" : "files"}{" "}
+            for {chosenPeople.length}{" "}
             {chosenPeople.length === 1 ? "participant" : "participants"}
           </p>
           {problems.length > 0 && (
-            <p className="share-hint" id="share-problems">{problems.join(" ")}</p>
+            <p className="share-hint" id="share-problems">
+              {problems.join(" ")}
+            </p>
           )}
         </div>
         <button
@@ -280,14 +330,24 @@ function SenderWorkspace({ session }) {
           SHARE
         </button>
       </div>
-      <Notice tone="info" onDismiss={shareNotice ? () => setShareNotice("") : undefined}>{shareNotice}</Notice>
+      <Notice
+        tone="info"
+        onDismiss={shareNotice ? () => setShareNotice("") : undefined}
+      >
+        {shareNotice}
+      </Notice>
 
       <TransferHistory rows={history} />
 
       <section className="panel panel-close" aria-labelledby="close-heading">
         <h2 id="close-heading">Close room</h2>
-        <p className="muted">Closing deletes the room, its participants and its history. Nobody can join it again.</p>
-        <button type="button" className="btn btn-danger" onClick={handleClose}>Close room</button>
+        <p className="muted">
+          Closing deletes the room, its participants and its history. Nobody can
+          join it again.
+        </p>
+        <button type="button" className="btn btn-danger" onClick={handleClose}>
+          Close room
+        </button>
       </section>
 
       {fileToRemove && (
@@ -298,7 +358,10 @@ function SenderWorkspace({ session }) {
           onConfirm={confirmRemoveFile}
           onCancel={() => setFileToRemove(null)}
         >
-          <p className="dialog-detail"><strong>{fileToRemove.file.name}</strong> ({formatBytes(fileToRemove.file.size)})</p>
+          <p className="dialog-detail">
+            <strong>{fileToRemove.file.name}</strong> (
+            {formatBytes(fileToRemove.file.size)})
+          </p>
         </ConfirmDialog>
       )}
 
@@ -310,7 +373,10 @@ function SenderWorkspace({ session }) {
           onConfirm={confirmRemovePerson}
           onCancel={() => setPersonToRemove(null)}
         >
-          <p className="dialog-detail"><strong>{personToRemove.name}</strong> will lose access and their ID will stop working.</p>
+          <p className="dialog-detail">
+            <strong>{personToRemove.name}</strong> will lose access and their ID
+            will stop working.
+          </p>
         </ConfirmDialog>
       )}
 
@@ -322,7 +388,8 @@ function SenderWorkspace({ session }) {
           onCancel={() => setShareOpen(false)}
         >
           <p className="muted">
-            Each file below goes to each participant listed: {chosenFiles.length} × {chosenPeople.length} ={" "}
+            Each file below goes to each participant listed:{" "}
+            {chosenFiles.length} × {chosenPeople.length} ={" "}
             {chosenFiles.length * chosenPeople.length} transfers.
           </p>
           <div className="share-map">
@@ -330,14 +397,23 @@ function SenderWorkspace({ session }) {
               <h3>Files</h3>
               <ul>
                 {chosenFiles.map((f) => (
-                  <li key={f.id}>{f.file.name} <span className="muted small">({formatBytes(f.file.size)})</span></li>
+                  <li key={f.id}>
+                    {f.file.name}{" "}
+                    <span className="muted small">
+                      ({formatBytes(f.file.size)})
+                    </span>
+                  </li>
                 ))}
               </ul>
             </div>
             <div>
               <h3>Participants</h3>
               <ul className="chips">
-                {chosenPeople.map((p) => <li key={p.id} className="chip">{p.name}</li>)}
+                {chosenPeople.map((p) => (
+                  <li key={p.id} className="chip">
+                    {p.name}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>

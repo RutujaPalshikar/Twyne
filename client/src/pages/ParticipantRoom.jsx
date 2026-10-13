@@ -7,31 +7,33 @@ import { DEFAULT_HEARTBEAT_INTERVAL_MS } from "../config.js";
 import useReceiver from "../hooks/useReceiver.js";
 import ReceivedFiles from "../components/ReceivedFiles.jsx";
 
-// Guard: only a participant who joined THIS room may see it.
 export default function ParticipantRoom() {
   const { session } = useSession();
   const { roomCode } = useParams();
-  if (!session || session.role !== "participant" || session.roomCode !== roomCode) {
+  if (
+    !session ||
+    session.role !== "participant" ||
+    session.roomCode !== roomCode
+  ) {
     return <Navigate to="/" replace />;
   }
   return <ParticipantWorkspace session={session} />;
 }
 
-// A participant sees only: the room name, their own name, connection status and an
-// area for received files. No participant IDs, sender file list, history or controls.
 function ParticipantWorkspace({ session }) {
   const { endSession } = useSession();
   const [connected, setConnected] = useState(true);
-  const pollMs = session.config?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+  const pollMs =
+    session.config?.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
 
-  // Lightweight check that doubles as the connection indicator.
   async function check() {
     try {
       await api.getActiveParticipants(session);
       setConnected(true);
     } catch (err) {
       if (err.status === 404) endSession("This room was closed by the sender.");
-      else if (err.status === 401) endSession("The sender removed you from this room.");
+      else if (err.status === 401)
+        endSession("The sender removed you from this room.");
       else setConnected(false);
     }
   }
@@ -53,15 +55,26 @@ function ParticipantWorkspace({ session }) {
         <div>
           <p className="muted small">Participant room</p>
           <h1>{session.roomName}</h1>
-          <p className="muted">You're joined as <strong>{session.participantName}</strong>.</p>
+          <p className="muted">
+            You're joined as <strong>{session.participantName}</strong>.
+          </p>
         </div>
-        <button type="button" className="btn btn-secondary" onClick={handleLeave}>Leave room</button>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handleLeave}
+        >
+          Leave room
+        </button>
       </header>
 
       <div className="workspace">
         <section className="panel" aria-labelledby="status-heading">
           <h2 id="status-heading">Connection</h2>
-          <p className={`status ${connected ? "status-active" : "status-idle"}`} role="status">
+          <p
+            className={`status ${connected ? "status-active" : "status-idle"}`}
+            role="status"
+          >
             {connected ? "Connected" : "Reconnecting…"}
           </p>
           <p className="muted small">

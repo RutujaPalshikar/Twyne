@@ -7,7 +7,7 @@ import Notice from "../components/Notice.jsx";
 export default function JoinRoom() {
   const { session, startSession } = useSession();
   const navigate = useNavigate();
-  const [step, setStep] = useState("code"); // "code" -> "details"
+  const [step, setStep] = useState("code");
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [participantId, setParticipantId] = useState("");
@@ -23,7 +23,11 @@ export default function JoinRoom() {
       await api.getRoomStatus(code);
       setStep("details");
     } catch (err) {
-      setError(err.status === 404 ? "No open room has that code. Check it with the sender." : err.message);
+      setError(
+        err.status === 404
+          ? "No open room has that code. Check it with the sender."
+          : err.message,
+      );
     } finally {
       setBusy(false);
     }
@@ -66,7 +70,8 @@ export default function JoinRoom() {
 
       {session && (
         <Notice tone="info">
-          This tab is already in room {session.roomCode}. Joining another room leaves it.
+          This tab is already in room {session.roomCode}. Joining another room
+          leaves it.
         </Notice>
       )}
 
@@ -77,7 +82,9 @@ export default function JoinRoom() {
             id="roomCode"
             className="code-input"
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            onChange={(e) =>
+              setCode(e.target.value.replace(/\D/g, "").slice(0, 4))
+            }
             inputMode="numeric"
             pattern="[0-9]{4}"
             maxLength={4}
@@ -86,7 +93,10 @@ export default function JoinRoom() {
             required
           />
           <Notice tone="error">{error}</Notice>
-          <button className="btn btn-primary" disabled={busy || code.length !== 4}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || code.length !== 4}
+          >
             {busy ? "Checking…" : "Continue"}
           </button>
         </form>
@@ -106,7 +116,9 @@ export default function JoinRoom() {
             id="participantId"
             className="id-input"
             value={participantId}
-            onChange={(e) => setParticipantId(e.target.value.toUpperCase().replace(/\s/g, ""))}
+            onChange={(e) =>
+              setParticipantId(e.target.value.toUpperCase().replace(/\s/g, ""))
+            }
             maxLength={8}
             autoCapitalize="characters"
             spellCheck={false}
@@ -114,7 +126,10 @@ export default function JoinRoom() {
             required
           />
           <Notice tone="error">{error}</Notice>
-          <button className="btn btn-primary" disabled={busy || !name.trim() || participantId.length !== 8}>
+          <button
+            className="btn btn-primary"
+            disabled={busy || !name.trim() || participantId.length !== 8}
+          >
             {busy ? "Joining…" : "Join room"}
           </button>
           <button

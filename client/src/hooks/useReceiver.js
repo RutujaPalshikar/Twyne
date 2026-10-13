@@ -3,15 +3,12 @@ import { api } from "../api/client.js";
 import { sleep } from "../utils/sleep.js";
 import { DEFAULT_RECEIVER_POLL_MS } from "../config.js";
 
-const FATAL = new Set([401, 403, 404, 409, 410]); // the server has already decided: don't retry
+const FATAL = new Set([401, 403, 404, 409, 410]);
 const MAX_ATTEMPTS = 5;
 
-// Polls for files addressed to this participant, downloads each one chunk by chunk (in order),
-// keeps the chunks in browser memory and rebuilds the file as a Blob.
-// items: [{ id, filename, size, status: "waiting"|"receiving"|"ready"|"failed", receivedChunks, totalChunks, url, error }]
 export default function useReceiver(session) {
   const [items, setItems] = useState([]);
-  const urls = useRef(new Map()); // transferId -> object URL (revoked when no longer needed)
+  const urls = useRef(new Map());
   const pollMs = session.config?.receiverPollMs ?? DEFAULT_RECEIVER_POLL_MS;
 
   useEffect(() => {
@@ -21,9 +18,11 @@ export default function useReceiver(session) {
     const queue = [];
     let working = false;
 
-    const patch = (id, changes) => setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...changes } : i)));
+    const patch = (id, changes) =>
+      setItems((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, ...changes } : i)),
+      );
 
-    // Retry network hiccups; give up immediately on answers the server will not change.
     async function withRetry(fn) {
       for (let attempt = 1; ; attempt++) {
         try {
@@ -40,10 +39,11 @@ export default function useReceiver(session) {
       }
     }
 
-    // Wait (by polling) until the sender has uploaded chunk `index`.
     async function fetchChunk(t, index) {
       for (;;) {
-        const buf = await withRetry(() => api.getChunk(session, t.id, index, signal));
+        const buf = await withRetry(() =>
+          api.getChunk(session, t.id, index, signal),
+        );
         if (buf) return buf;
         await sleep(250, signal);
       }
@@ -51,26 +51,36 @@ export default function useReceiver(session) {
 
     async function receiveOne(t) {
       patch(t.id, { status: "receiving" });
-      const parts = []; // the file's chunks, in order, in memory
+      const parts = [];
       try {
         for (let index = 0; index < t.totalChunks; index++) {
           const buf = await fetchChunk(t, index);
-          const expected = index === t.totalChunks - 1 ? t.size - index * t.chunkSize : t.chunkSize;
-          if (buf.byteLength !== expected) throw new Error("Received a damaged chunk");
+          const expected =
+            index === t.totalChunks - 1
+              ? t.size - index * t.chunkSize
+              : t.chunkSize;
+          if (buf.byteLength !== expected)
+            throw new Error("Received a damaged chunk");
           parts.push(buf);
           await withRetry(() => api.ackChunk(session, t.id, index, signal));
           patch(t.id, { receivedChunks: index + 1 });
         }
-        const blob = new Blob(parts, { type: t.mimeType || "application/octet-stream" });
+        const blob = new Blob(parts, {
+          type: t.mimeType || "application/octet-stream",
+        });
         const url = URL.createObjectURL(blob);
         urls.current.set(t.id, url);
         patch(t.id, { status: "ready", url });
       } catch (err) {
         if (signal.aborted) return;
-        if (!err.serverDecided) api.failTransfer(session, t.id, "Receiver error").catch(() => {});
+        if (!err.serverDecided)
+          api.failTransfer(session, t.id, "Receiver error").catch(() => {});
         patch(t.id, {
           status: "failed",
-          error: err.status === 410 || err.status === 409 ? "Delivery was stopped" : err.message,
+          error:
+            err.status === 410 || err.status === 409
+              ? "Delivery was stopped"
+              : err.message,
         });
       }
     }
@@ -78,7 +88,8 @@ export default function useReceiver(session) {
     async function work() {
       if (working) return;
       working = true;
-      while (queue.length > 0 && !signal.aborted) await receiveOne(queue.shift());
+      while (queue.length > 0 && !signal.aborted)
+        await receiveOne(queue.shift());
       working = false;
     }
 
@@ -92,23 +103,34 @@ export default function useReceiver(session) {
             queue.push(t);
             setItems((prev) => [
               ...prev,
-              { id: t.id, filename: t.filename, size: t.size, status: "waiting", receivedChunks: 0, totalChunks: t.totalChunks },
+              {
+                id: t.id,
+                filename: t.filename,
+                size: t.size,
+                status: "waiting",
+                receivedChunks: 0,
+                totalChunks: t.totalChunks,
+              },
             ]);
           }
           work();
           await sleep(pollMs, signal);
         } catch (err) {
-          if (err.name === "AbortError" || err.status === 404 || err.status === 401) return;
+          if (
+            err.name === "AbortError" ||
+            err.status === 404 ||
+            err.status === 401
+          )
+            return;
           await sleep(pollMs, signal).catch(() => {});
         }
       }
     }
 
     pollLoop();
-    return () => controller.abort(); // leaving the room cancels downloads
+    return () => controller.abort();
   }, [session, pollMs]);
 
-  // Free object URLs when the participant leaves the page.
   useEffect(() => {
     const map = urls.current;
     return () => {
@@ -117,7 +139,6 @@ export default function useReceiver(session) {
     };
   }, []);
 
-  // Let the participant free memory once they have saved a file (or to dismiss a failure).
   const dismiss = useCallback((id) => {
     const url = urls.current.get(id);
     if (url) URL.revokeObjectURL(url);

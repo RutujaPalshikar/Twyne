@@ -1,4 +1,3 @@
-// Clipboard with a fallback for browsers/contexts where navigator.clipboard is unavailable.
 export async function copyText(text) {
   try {
     await navigator.clipboard.writeText(text);

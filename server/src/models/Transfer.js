@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 
-// History METADATA only. File contents are never stored in MongoDB or on disk:
-// chunks exist only in server RAM (services/transferService.js) while in flight.
 const recipientSchema = new mongoose.Schema(
   {
-    participant: { type: mongoose.Schema.Types.ObjectId, ref: "Participant", required: true },
+    participant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Participant",
+      required: true,
+    },
     participantName: { type: String, required: true },
     status: {
       type: String,
@@ -15,12 +17,17 @@ const recipientSchema = new mongoose.Schema(
     error: { type: String, default: null },
     updatedAt: { type: Date, default: Date.now },
   },
-  { _id: false }
+  { _id: false },
 );
 
 const transferSchema = new mongoose.Schema(
   {
-    room: { type: mongoose.Schema.Types.ObjectId, ref: "Room", required: true, index: true },
+    room: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Room",
+      required: true,
+      index: true,
+    },
     fileId: { type: String, required: true },
     filename: { type: String, required: true },
     mimeType: { type: String, default: "" },
@@ -30,15 +37,22 @@ const transferSchema = new mongoose.Schema(
     uploadedChunks: { type: Number, default: 0 },
     status: {
       type: String,
-      enum: ["queued", "uploading", "completed", "partial", "failed", "aborted"],
+      enum: [
+        "queued",
+        "uploading",
+        "completed",
+        "partial",
+        "failed",
+        "aborted",
+      ],
       default: "queued",
     },
-    batchId: { type: String, required: true }, // one SHARE click = one batch
-    seq: { type: Number, required: true }, // position inside the batch
+    batchId: { type: String, required: true },
+    seq: { type: Number, required: true },
     queuedAt: { type: Date, required: true },
     recipients: { type: [recipientSchema], default: [] },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 export default mongoose.model("Transfer", transferSchema);

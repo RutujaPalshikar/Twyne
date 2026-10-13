@@ -5,15 +5,23 @@ import CopyButton from "./CopyButton.jsx";
 import Notice from "./Notice.jsx";
 
 function StatusBadge({ participant }) {
-  if (participant.active) return <span className="status status-active">Active</span>;
-  if (participant.joined) return <span className="status status-idle">Inactive</span>;
+  if (participant.active)
+    return <span className="status status-active">Active</span>;
+  if (participant.joined)
+    return <span className="status status-idle">Inactive</span>;
   return <span className="status status-waiting">Not joined yet</span>;
 }
 
-// Only ACTIVE participants can be ticked: inactive ones are disabled.
 export default function ParticipantsPanel({
-  participants, max, selectedIds, inviteText,
-  onAdd, onToggle, onSelectAll, onDeselectAll, onRemove,
+  participants,
+  max,
+  selectedIds,
+  inviteText,
+  onAdd,
+  onToggle,
+  onSelectAll,
+  onDeselectAll,
+  onRemove,
 }) {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
@@ -39,11 +47,15 @@ export default function ParticipantsPanel({
     <section className="panel" aria-labelledby="people-heading">
       <div className="panel-title">
         <h2 id="people-heading">Participants</h2>
-        <span className="count">{participants.length} of {max}</span>
+        <span className="count">
+          {participants.length} of {max}
+        </span>
       </div>
 
       <form onSubmit={handleAdd} className="inline-form">
-        <label htmlFor="pname" className="sr-only">Participant name</label>
+        <label htmlFor="pname" className="sr-only">
+          Participant name
+        </label>
         <input
           id="pname"
           value={name}
@@ -53,14 +65,20 @@ export default function ParticipantsPanel({
           autoComplete="off"
           disabled={full}
         />
-        <button className="btn btn-primary" disabled={adding || full || !name.trim()}>
+        <button
+          className="btn btn-primary"
+          disabled={adding || full || !name.trim()}
+        >
           {adding ? "Adding…" : "Add participant"}
         </button>
       </form>
       <Notice tone="error">{error}</Notice>
 
       {participants.length === 0 ? (
-        <p className="empty">No participants yet. Add a name above and Twyne will generate an ID for that person.</p>
+        <p className="empty">
+          No participants yet. Add a name above and Twyne will generate an ID
+          for that person.
+        </p>
       ) : (
         <>
           <SelectTools
@@ -86,7 +104,10 @@ export default function ParticipantsPanel({
                     <StatusBadge participant={p} />
                   </span>
                 </label>
-                <XButton label={`Remove ${p.name}`} onClick={() => onRemove(p)} />
+                <XButton
+                  label={`Remove ${p.name}`}
+                  onClick={() => onRemove(p)}
+                />
                 <div className="person-extra">
                   <div className="roster-id">
                     <span className="muted small">Participant ID</span>

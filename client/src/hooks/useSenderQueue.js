@@ -3,20 +3,24 @@ import { api } from "../api/client.js";
 import { uploadTransfer } from "../transfer/senderUpload.js";
 import { DEFAULT_BUFFER_WINDOW_CHUNKS } from "../config.js";
 
-// Files are uploaded ONE AT A TIME, in the order they were shared (also across repeated
-// SHARE clicks). Each file is uploaded once and the server delivers it to every recipient.
 export default function useSenderQueue(session, onProblem) {
-  const ref = useRef({ queue: [], running: false, controller: null, open: new Set() });
-  const windowChunks = session.config?.bufferWindowChunks ?? DEFAULT_BUFFER_WINDOW_CHUNKS;
+  const ref = useRef({
+    queue: [],
+    running: false,
+    controller: null,
+    open: new Set(),
+  });
+  const windowChunks =
+    session.config?.bufferWindowChunks ?? DEFAULT_BUFFER_WINDOW_CHUNKS;
 
   useEffect(() => {
     const s = ref.current;
     s.controller = new AbortController();
     return () => {
-      // Leaving the workspace stops sending: tell the server so receivers aren't left waiting.
       s.controller.abort();
       s.queue.length = 0;
-      for (const id of s.open) api.abortTransfer(session, id, { keepalive: true }).catch(() => {});
+      for (const id of s.open)
+        api.abortTransfer(session, id, { keepalive: true }).catch(() => {});
       s.open.clear();
     };
   }, [session]);
@@ -30,12 +34,21 @@ export default function useSenderQueue(session, onProblem) {
       while (s.queue.length > 0) {
         const { transfer, file } = s.queue.shift();
         try {
-          const result = await uploadTransfer({ session, transfer, file, windowChunks, signal });
-          if (result === "failed") onProblem?.(`Could not upload ${transfer.filename}. Check your connection.`);
+          const result = await uploadTransfer({
+            session,
+            transfer,
+            file,
+            windowChunks,
+            signal,
+          });
+          if (result === "failed")
+            onProblem?.(
+              `Could not upload ${transfer.filename}. Check your connection.`,
+            );
         } catch (err) {
           if (err.name === "AbortError") return;
           if (err.status === 404 || err.status === 401) {
-            s.queue.length = 0; // room closed: the session handler takes it from here
+            s.queue.length = 0;
             return;
           }
           onProblem?.(`Could not upload ${transfer.filename}: ${err.message}`);
@@ -49,7 +62,6 @@ export default function useSenderQueue(session, onProblem) {
     }
   }, [session, windowChunks, onProblem]);
 
-  // items: [{ transfer, file }]  (transfer comes from the server's createTransfers response)
   const enqueue = useCallback(
     (items) => {
       const s = ref.current;
@@ -59,7 +71,7 @@ export default function useSenderQueue(session, onProblem) {
       }
       run();
     },
-    [run]
+    [run],
   );
 
   return { enqueue };

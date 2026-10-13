@@ -6,22 +6,26 @@ import { isFresh } from "../utils/presence.js";
 import { closeRoom } from "../services/roomService.js";
 
 const invalidSession = () =>
-  new HttpError(401, "Your session is not valid for this room.", "INVALID_SESSION");
+  new HttpError(
+    401,
+    "Your session is not valid for this room.",
+    "INVALID_SESSION",
+  );
 
 function bearerToken(req) {
   const match = (req.get("authorization") || "").match(/^Bearer (.+)$/i);
   return match ? match[1] : null;
 }
 
-// 1. Every room route: the room must exist and its sender must still be active.
 export async function loadRoom(req, res, next) {
   const { roomCode } = req.params;
   if (!/^\d{4}$/.test(roomCode)) throw roomClosed();
 
-  const room = await Room.findOne({ roomCode, isActive: true }).select("+senderSessionToken");
+  const room = await Room.findOne({ roomCode, isActive: true }).select(
+    "+senderSessionToken",
+  );
   if (!room) throw roomClosed();
 
-  // Sender went quiet: close the room right now instead of waiting for the sweeper.
   if (!isFresh(room.senderLastSeen)) {
     await closeRoom(room._id);
     throw roomClosed();
@@ -30,10 +34,10 @@ export async function loadRoom(req, res, next) {
   next();
 }
 
-// 2a. Sender-only routes.
 export function requireSender(req, res, next) {
   const token = bearerToken(req);
-  if (!token || !tokensMatch(token, req.room.senderSessionToken)) throw invalidSession();
+  if (!token || !tokensMatch(token, req.room.senderSessionToken))
+    throw invalidSession();
   req.role = "sender";
   next();
 }
@@ -44,7 +48,6 @@ async function findParticipantByToken(req) {
   return Participant.findOne({ room: req.room._id, sessionToken: token });
 }
 
-// 2b. Participant-only routes.
 export async function requireParticipant(req, res, next) {
   const participant = await findParticipantByToken(req);
   if (!participant) throw invalidSession();
@@ -53,7 +56,6 @@ export async function requireParticipant(req, res, next) {
   next();
 }
 
-// 2c. Either the sender or a joined participant.
 export async function requireMember(req, res, next) {
   const token = bearerToken(req);
   if (token && tokensMatch(token, req.room.senderSessionToken)) {

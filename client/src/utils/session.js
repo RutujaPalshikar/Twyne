@@ -1,5 +1,3 @@
-// The temporary session lives in sessionStorage: it survives a refresh of this
-// tab, but disappears when the tab closes. No accounts, nothing permanent.
 const KEY = "twyne.session";
 
 export function loadSession() {
@@ -9,5 +7,6 @@ export function loadSession() {
     return null;
   }
 }
-export const storeSession = (session) => sessionStorage.setItem(KEY, JSON.stringify(session));
+export const storeSession = (session) =>
+  sessionStorage.setItem(KEY, JSON.stringify(session));
 export const removeSession = () => sessionStorage.removeItem(KEY);
